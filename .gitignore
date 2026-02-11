@@ -1,5 +1,6 @@
 backend/.venv/
 backend/__pycache__/
 backend/.env
-text_localization.pdf
+FASText_Efficient_Unconstrained_Scene_Text_Detector.pdf
+Text_Localization_in_Unconstrained_Images.pdf
 test.jpg
