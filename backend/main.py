@@ -1,11 +1,11 @@
-from services import preprocess_service
+from services import text_extraction
 
-doc = preprocess_service.Document()
+doc = text_extraction.Document()
 
 # You can pass the lang (as 3 letters code) to the class to improve accuracy
 # On ubuntu it requires the package tesseract-ocr-$lang$
 # On other OS, see https://github.com/tesseract-ocr/langdata
-doc = preprocess_service.Document(lang="deu")
+doc = text_extraction.Document(lang="deu")
 
 # Read the file in. Currently accepts pdf, png, jpg, bmp, tiff.
 # If reading a PDF, doc2text will split the PDF into its component pages.
