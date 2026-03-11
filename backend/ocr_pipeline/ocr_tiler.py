@@ -1,23 +1,28 @@
 """
-Receipt OCR Preprocessing Pipeline  (v3)
-=========================================
-Produces UVDoc-ready tiles from a receipt photo.
+ocr_pipeline/ocr_tiler.py
+=========================
+Produces UVDoc-ready tiles from a receipt photo to be used in ocr_dewarper.
 
 Pipeline:
-  1. Detect receipt via projection-guided contour search + minAreaRect
-     → correctly handles arbitrary rotation angles
-  2. Centre deskewed receipt on a background-coloured canvas
-  3. Slice into A4-proportioned tiles (top / middle / bottom) with overlap
-  4. Pad each tile symmetrically so the receipt section sits centred
-     like an A4 document in the middle of the frame
+    1. Detect receipt via projection-guided contour search + minAreaRect
+        NOTE: should correctly handle arbitrary rotation angles
+    2. Center deskewed receipt on a background-coloured canvas
+    3. Slice into A4-proportioned tiles (top / middle / bottom) with overlap
+    4. Pad each tile symmetrically so the receipt section sits centered like an A4 document in the middle of the frame
 
 Usage:
-    TODO: change to script only
+    import cv2, pytesseract
+    from ocr_pipeline.ocr_tiler import get_tiles
 
-    python receipt_preprocess.py <input_image> [--out_dir tiles] [--overlap 0.15] [--debug]
+    image = cv2.imread("receipt.jpg")
+    texts = []
+    for tile in get_tiles(image):
+        rgb  = cv2.cvtColor(tile["image"], cv2.COLOR_BGR2RGB)
+        text = pytesseract.image_to_string(rgb, lang="deu")
+        texts.append(text)
+    full_text = "\n".join(texts)
 """
 
-import argparse
 import os
 import warnings
 from pathlib import Path
@@ -25,15 +30,16 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-A4_RATIO = 210 / 297   # width / height
+
+TARGET_RATIO = 210 / 297   # A4 document 
 
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Helper functions
 # ---------------------------------------------------------------------------
 
 def sample_background_color(image: np.ndarray) -> np.ndarray:
-    """Median colour of the four image corners (robust to bright receipt)."""
+    """Median colour of the four image corners"""
     h, w = image.shape[:2]
     s = max(20, min(h, w) // 30)
     corners = [image[:s, :s], image[:s, -s:], image[-s:, :s], image[-s:, -s:]]
@@ -42,10 +48,7 @@ def sample_background_color(image: np.ndarray) -> np.ndarray:
 
 
 def order_and_warp(image: np.ndarray, rect, bg_scalar: tuple) -> np.ndarray:
-    """
-    Given a cv2.minAreaRect, perspective-warp the receipt to a
-    straight portrait image.
-    """
+    """Given a cv2.minAreaRect, perspective-warp the receipt to a straight portrait image"""
     box = cv2.boxPoints(rect).astype(np.float32)
     s    = box.sum(axis=1)
     diff = np.diff(box, axis=1).flatten()
@@ -77,7 +80,7 @@ def order_and_warp(image: np.ndarray, rect, bg_scalar: tuple) -> np.ndarray:
 
 
 # ---------------------------------------------------------------------------
-# Step 1 – Detection & deskew
+# Step 1 - Detection & deskew
 # ---------------------------------------------------------------------------
 
 def detect_and_deskew(
@@ -86,14 +89,13 @@ def detect_and_deskew(
     stem: str = "img",
 ) -> tuple[np.ndarray, np.ndarray, float]:
     """
-    Detect the receipt boundary and correct perspective / rotation.
+    Detect the receipt boundary and correct the perspective / rotation
 
-    Strategy:
-    1.  Threshold → column & row projection to find rough receipt band.
-    2.  Crop to that band (+ margin) and run morphological close inside
-        the crop — avoids bridging to bright areas outside the receipt.
-    3.  Find the largest contour and fit minAreaRect.
-    4.  Perspective-warp to a straight portrait image.
+    - Find rough receipt band using column & row projection with threshold
+    - Crop to that band (+ margin) and run morphological close inside
+       the crop to avoid bridging to bright areas outside the receipt
+    - Find the largest contour and fit minAreaRect
+    - Perspective-warp to a straight portrait image
 
     Returns (deskewed_image, bg_color, angle_corrected).
     """
@@ -101,12 +103,12 @@ def detect_and_deskew(
     bg_color = sample_background_color(image)
     h_img, w_img = image.shape[:2]
 
-    # ── Threshold ────────────────────────────────────────────────────────────
+    # Threshold
     otsu_val, _ = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     forced = float(np.clip(otsu_val, 100, 180))
     _, thresh = cv2.threshold(gray, forced, 255, cv2.THRESH_BINARY)
 
-    # ── Projection-based crop ─────────────────────────────────────────────
+    # Projection-based crop
     # Column projection: find the horizontal band containing the receipt
     col_proj  = thresh.mean(axis=0)
     row_proj  = thresh.mean(axis=1)
@@ -134,7 +136,7 @@ def detect_and_deskew(
 
     crop_thresh = thresh[cy0:cy1, cx0:cx1]
 
-    # ── Morphological close inside crop ──────────────────────────────────
+    # Morphological close inside crop
     # Tall vertical kernel to join the receipt body across horizontal text gaps
     k_vert  = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 60))
     k_sq    = cv2.getStructuringElement(cv2.MORPH_RECT, (20, 20))
@@ -145,7 +147,7 @@ def detect_and_deskew(
         cv2.imwrite(os.path.join(debug_dir, f"{stem}_thresh.jpg"),
                     cv2.resize(closed, None, fx=0.5, fy=0.5))
 
-    # ── Contour selection ─────────────────────────────────────────────────
+    # Contour selection
     contours, _ = cv2.findContours(closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     crop_area = (cx1 - cx0) * (cy1 - cy0)
 
@@ -168,12 +170,13 @@ def detect_and_deskew(
 
     if best is None:
         warnings.warn("Receipt detection failed; using full image.")
-        h, w = image.shape[:2]
-        fake_rect = ((w / 2, h / 2), (float(w), float(h)), 0.0)
+        # h, w = image.shape[:2]
+        # fake_rect = ((w / 2, h / 2), (float(w), float(h)), 0.0)
         return image.copy(), bg_color, 0.0
 
     cnt, rect_crop = best
-    # Translate rect centre back to full-image coordinates
+
+    # Translate rect center back to full-image coordinates
     cx, cy  = rect_crop[0]
     size    = rect_crop[1]
     angle   = rect_crop[2]
@@ -194,20 +197,20 @@ def detect_and_deskew(
 
 
 # ---------------------------------------------------------------------------
-# Step 2 – Centre on background canvas
+# Step 2 - Center on background canvas
 # ---------------------------------------------------------------------------
 
-def centre_receipt_on_background(
+def center_receipt_on_background(
     receipt: np.ndarray,
     bg_color: np.ndarray,
     side_pad_frac: float = 0.12,
     vert_pad_frac: float = 0.04,
 ) -> tuple[np.ndarray, int, int]:
     """
-    Embed receipt in a background canvas.
+    Embed receipt in a background canvas
 
     Returns (padded_image, pad_x, pad_y).
-    Vertical padding is intentionally small — tiling handles the vertical axis.
+    Vertical padding is intentionally small - tiling handles the vertical axis.
     """
     h, w     = receipt.shape[:2]
     pad_x    = int(w * side_pad_frac)
@@ -218,7 +221,7 @@ def centre_receipt_on_background(
 
 
 # ---------------------------------------------------------------------------
-# Step 3 – Tiling
+# Step 3 - Tiling
 # ---------------------------------------------------------------------------
 
 def compute_tiles(
@@ -227,14 +230,14 @@ def compute_tiles(
     overlap:   float = 0.15,
 ) -> list[dict]:
     """
-    Divide receipt height into A4-proportioned slices.
+    Divide receipt height into A4-proportioned slices
 
-    Each tile's receipt window: width = receipt_w, height = receipt_w / A4_RATIO.
-    Step between tiles   = tile_h × (1 − overlap).
+    Each tile's receipt window: width = receipt_w, height = receipt_w / TARGET_RATIO.
+    Step between tiles   = tile_h x (1 - overlap).
 
     Returns list of dicts: {type, ry_start, ry_end}
     """
-    tile_rh = int(round(receipt_w / A4_RATIO))
+    tile_rh = int(round(receipt_w / TARGET_RATIO))
     step    = max(1, int(round(tile_rh * (1.0 - overlap))))
 
     # If the receipt fits in a single tile, one tile covers everything.
@@ -247,9 +250,9 @@ def compute_tiles(
     while True:
         starts.append(ry)
         next_ry = ry + step
-        # Would the *next* tile's end reach/exceed the receipt bottom?
-        # If so, shift this next tile back so it ends exactly at receipt_h,
-        # guaranteeing A4 proportions. The resulting overlap will be >= min_overlap.
+        # If the next tile's end exceeds the bottom of the receipt,
+        # shift this tile back so it ends exactly at receipt_h to
+        # guarantee TARGET_RATIO proportions
         if next_ry + tile_rh >= receipt_h:
             last_start = receipt_h - tile_rh   # shift back to fill exactly
             if last_start > ry:                # avoid duplicate when already snug
@@ -271,7 +274,7 @@ def compute_tiles(
 
 
 # ---------------------------------------------------------------------------
-# Step 4 – Tile extraction with symmetric padding
+# Step 4 - Tile extraction with symmetric padding
 # ---------------------------------------------------------------------------
 
 def extract_tile(
@@ -282,12 +285,12 @@ def extract_tile(
     bg_color: np.ndarray,
 ) -> np.ndarray:
     """
-    Crop the tile region and pad so the A4 receipt window sits centred
+    Crop the tile region and pad so the A4 receipt window sits centered
     with equal margins on all four sides (margin = rx = side padding).
 
-    • top    – keeps natural BG above the receipt, pads below
-    • bottom – keeps natural BG below the receipt, pads above
-    • middle – pads both top and bottom equally
+    top    - keeps natural BG above the receipt, pads below
+    bottom - keeps natural BG below the receipt, pads above
+    middle - pads both top and bottom equally
     """
     img_h, img_w = padded.shape[:2]
     tile_rh      = tile["ry_end"] - tile["ry_start"]
@@ -341,7 +344,7 @@ def extract_tile(
 # ---------------------------------------------------------------------------
 
 def enhance_for_ocr(image: np.ndarray) -> np.ndarray:
-    """Upscale to ≥1240 px wide, CLAHE, bilateral filter, unsharp mask."""
+    """Upscale to >1240 px wide, CLAHE, bilateral filter, unsharp mask."""
     h, w = image.shape[:2]
     if w < 1240:
         scale = 1240 / w
@@ -360,12 +363,12 @@ def enhance_for_ocr(image: np.ndarray) -> np.ndarray:
 
 
 # ---------------------------------------------------------------------------
-# Main pipeline – in-memory (no file I/O)
+# Main pipeline
 # ---------------------------------------------------------------------------
 
 def get_tiles(
     image: np.ndarray,
-    overlap: float = 0.15,
+    overlap: float = 0.15,  # percentage of overlap between tiles
 ) -> list[dict]:
     """
     Core pipeline. Accepts a BGR numpy array and returns tile dicts in order
@@ -373,26 +376,13 @@ def get_tiles(
 
         {
             "type":  "top" | "middle" | "bottom",
-            "index": int,          # 0-based counter per type
-            "image": np.ndarray,   # BGR tile, ready for OCR
+            "index": int,         
+            "image": np.ndarray,   # tile ready for OCR
         }
-
-    No files are written. Typical usage with pytesseract:
-
-        import cv2, pytesseract
-        from receipt_preprocess import get_tiles
-
-        image = cv2.imread("receipt.jpg")
-        texts = []
-        for tile in get_tiles(image):
-            rgb  = cv2.cvtColor(tile["image"], cv2.COLOR_BGR2RGB)
-            text = pytesseract.image_to_string(rgb, lang="deu")
-            texts.append(text)
-        full_text = "\n".join(texts)
     """
     receipt, bg_color, _ = detect_and_deskew(image)
     receipt = enhance_for_ocr(receipt)
-    padded, pad_x, pad_y = centre_receipt_on_background(receipt, bg_color)
+    padded, pad_x, pad_y = center_receipt_on_background(receipt, bg_color)
     r_h, r_w = receipt.shape[:2]
 
     type_count: dict[str, int] = {}
@@ -413,7 +403,7 @@ def get_tiles(
 # Disk-saving wrapper (CLI / batch use)
 # ---------------------------------------------------------------------------
 
-def process_receipt(
+def save_tiles(
     input_path: str,
     out_dir:    str   = "tiles",
     overlap:    float = 0.15,
@@ -429,10 +419,10 @@ def process_receipt(
 
     if debug:
         receipt, bg_color, angle = detect_and_deskew(image, debug_dir=out_dir, stem=stem)
-        print(f"  Deskewed: {receipt.shape[1]}×{receipt.shape[0]}  "
+        print(f"  Deskewed: {receipt.shape[1]}x{receipt.shape[0]}  "
               f"(angle corrected: {angle:.1f}°)")
         receipt = enhance_for_ocr(receipt)
-        padded, pad_x, pad_y = centre_receipt_on_background(receipt, bg_color)
+        padded, pad_x, pad_y = center_receipt_on_background(receipt, bg_color)
         r_h, r_w = receipt.shape[:2]
         dbg_pad = padded.copy()
         cv2.rectangle(dbg_pad, (pad_x, pad_y),
@@ -446,7 +436,7 @@ def process_receipt(
         fpath = os.path.join(out_dir, fname)
         cv2.imwrite(fpath, t["image"], [cv2.IMWRITE_JPEG_QUALITY, 95])
         saved.append(fpath)
-        print(f"  Saved {fname}  [{t['image'].shape[1]}×{t['image'].shape[0]}]")
+        print(f"  Saved {fname}  [{t['image'].shape[1]}x{t['image'].shape[0]}]")
     return saved
 
 
@@ -455,6 +445,9 @@ def process_receipt(
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
+    pass
+
+    """
     p = argparse.ArgumentParser(description="Receipt OCR preprocessing pipeline v3")
     p.add_argument("input")
     p.add_argument("--out_dir",  default="tiles")
@@ -463,5 +456,6 @@ if __name__ == "__main__":
     args = p.parse_args()
 
     print(f"Processing: {args.input}")
-    paths = process_receipt(args.input, args.out_dir, args.overlap, args.debug)
-    print(f"\nDone – {len(paths)} tile(s) written to '{args.out_dir}/'")
+    paths = save_tiles(args.input, args.out_dir, args.overlap, args.debug)
+    print(f"\nDone - {len(paths)} tile(s) written to '{args.out_dir}/'")
+    """
