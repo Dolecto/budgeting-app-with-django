@@ -5,7 +5,7 @@ Produces UVDoc-ready tiles from a receipt photo to be used in ocr_dewarper.
 
 Pipeline:
     1. Detect receipt via projection-guided contour search + minAreaRect
-        NOTE: should correctly handle arbitrary rotation angles
+        NOTE: should correctly handle arbitrary rotation angles, if it doesn't then gg
     2. Center deskewed receipt on a background-coloured canvas
     3. Slice into A4-proportioned tiles (top / middle / bottom) with overlap
     4. Pad each tile symmetrically so the receipt section sits centered like an A4 document in the middle of the frame
@@ -16,13 +16,16 @@ Usage:
 
     image = cv2.imread("receipt.jpg")
     texts = []
+
     for tile in get_tiles(image):
         rgb  = cv2.cvtColor(tile["image"], cv2.COLOR_BGR2RGB)
         text = pytesseract.image_to_string(rgb, lang="deu")
         texts.append(text)
+
     full_text = "\n".join(texts)
 """
 
+import argparse
 import os
 import warnings
 from pathlib import Path
@@ -242,7 +245,7 @@ def compute_tiles(
 
     # If the receipt fits in a single tile, one tile covers everything.
     if receipt_h <= tile_rh:
-        return [{"type": "top", "ry_start": 0, "ry_end": tile_rh}]
+        return [{"index": 0, "type": "top", "ry_start": 0, "ry_end": tile_rh}]
 
     # Collect tile start positions using the fixed step.
     starts = []
@@ -269,7 +272,7 @@ def compute_tiles(
             t_type = "bottom"
         else:
             t_type = "middle"
-        tiles.append({"type": t_type, "ry_start": s, "ry_end": s + tile_rh})
+        tiles.append({"index": i, "type": t_type, "ry_start": s, "ry_end": s + tile_rh})
     return tiles
 
 
@@ -381,20 +384,18 @@ def get_tiles(
         }
     """
     receipt, bg_color, _ = detect_and_deskew(image)
-    receipt = enhance_for_ocr(receipt)
+    # receipt = enhance_for_ocr(receipt)
     padded, pad_x, pad_y = center_receipt_on_background(receipt, bg_color)
     r_h, r_w = receipt.shape[:2]
 
-    type_count: dict[str, int] = {}
     result = []
     for tile in compute_tiles(r_w, r_h, overlap=overlap):
         t   = tile["type"]
-        idx = type_count.get(t, 0)
-        type_count[t] = idx + 1
+        idx = tile["index"]
         result.append({
-            "type":  t,
             "index": idx,
-            "image": extract_tile(padded, tile, pad_x, pad_y, r_w, bg_color),
+            "type":  t,
+            "image": extract_tile(padded, tile, pad_x, pad_y, r_w, bg_color)
         })
     return result
 
@@ -444,10 +445,7 @@ def save_tiles(
 # CLI
 # ---------------------------------------------------------------------------
 
-if __name__ == "__main__":
-    pass
-
-    """
+if __name__ == "__main__": 
     p = argparse.ArgumentParser(description="Receipt OCR preprocessing pipeline v3")
     p.add_argument("input")
     p.add_argument("--out_dir",  default="tiles")
@@ -458,4 +456,3 @@ if __name__ == "__main__":
     print(f"Processing: {args.input}")
     paths = save_tiles(args.input, args.out_dir, args.overlap, args.debug)
     print(f"\nDone - {len(paths)} tile(s) written to '{args.out_dir}/'")
-    """
