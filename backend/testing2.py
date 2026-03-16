@@ -41,7 +41,8 @@ with open("demofile.html", "a") as f:
     f.write(f"<pre>{text_full}</pre><hr>")
     f.write("--------------------------------------------\n")
 """
-processed_full.save("dewarper/dewarped_full.png")
+os.makedirs("dewarper", exist_ok=True)
+dewarped_full.save("dewarper/dewarped_full.png")
 
 i = 0
 for tile in get_tiles(image):
@@ -55,7 +56,7 @@ for tile in get_tiles(image):
     preprocessed = preprocess_receipt(enhanced)
 
     os.makedirs("dewarper", exist_ok=True)
-    enhanced.save(f"dewarper/dewarped0{i}.png")
+    dewarped.save(f"dewarper/dewarped0{i}.png")
     i += 1
     text = extract_text(preprocessed)
     print(text)
