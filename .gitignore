@@ -1,13 +1,10 @@
-backend/.venv/
-# backend/__pycache__/
-backend/.env
+# Backend stuff
+*.venv
+backend/output
 testing-materials/
-FASText_Efficient_Unconstrained_Scene_Text_Detector.pdf
-Text_Localization_in_Unconstrained_Images.pdf
-test.jpg
 __pycache__*
 
-# Logs
+# Frontend Logs
 logs
 *.log
 npm-debug.log*
