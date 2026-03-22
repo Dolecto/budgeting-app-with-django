@@ -1,6 +1,31 @@
-backend/.venv/
-backend/__pycache__/
-backend/.env
-FASText_Efficient_Unconstrained_Scene_Text_Detector.pdf
-Text_Localization_in_Unconstrained_Images.pdf
-test.jpg
+# Backend stuff
+*.venv
+backend/output
+testing-materials/
+__pycache__*
+
+# Frontend Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.vite*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
