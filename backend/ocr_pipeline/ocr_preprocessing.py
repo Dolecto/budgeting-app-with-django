@@ -4,6 +4,10 @@ ocr_pipeline/ocr_preprocessing.py
 A collection of preprocessing functions for images to be fed into ocr_text_extraction.
 
 Includes a OCRPreprocessingPipeline class to allow creation of multiple pipelines for confidence voting.
+
+Pipelines so far:
+1. upscale(1.15) - denoise("bilateral") - enhance("clahe+bilateral+unsharp")   # for some reason, these are different
+2. normalize - denoise("bilateral") - enhance("clahe") - upscale(1.15)         # 
 """
 
 import numpy as np
