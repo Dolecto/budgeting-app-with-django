@@ -1,7 +1,7 @@
 """
-ocr_preprocessing.py
+ocr_pipeline/ocr_preprocessing.py
 ====================
-A collection of preprocessing functions for images to be fed into ocr_text_extractor.
+A collection of preprocessing functions for images to be fed into ocr_text_extraction.
 
 Includes a OCRPreprocessingPipeline class to allow creation of multiple pipelines for confidence voting.
 """
@@ -18,7 +18,6 @@ class OCRPreprocessingPipeline:
     ----------
     steps : list[callable]
           A list of preprocessing functions. Function parameters should be specified here.
-          Usage: lambda img: enhance(img, method="clahe")
     name : str
         A name for this pipeline for debugging purposes.
 
@@ -38,16 +37,6 @@ class OCRPreprocessingPipeline:
         self.name = name    
 
 
-    def run(self, image_path: str):
-        """Run the preprocessing functions in sequence."""
-        img = self.load(image_path)
-
-        for step in self.steps:
-            img = step(img)
-
-        return img
-    
-    
     def load(self, path: str) -> np.ndarray:
         """Load an image from a file path into a BGR uint8 numpy array."""
         img = cv2.imread(path)
@@ -55,6 +44,16 @@ class OCRPreprocessingPipeline:
             raise FileNotFoundError(f"Could not read image: {path}")
         return img
 
+
+    def run(self, image_path: str):
+        """Run the preprocessing functions in sequence."""
+        # TODO: figure out how to run this in parallel
+        img = self.load(image_path)
+
+        for step in self.steps:
+            img = step(img)
+
+        return img
 
 
     # Helper functions
@@ -351,7 +350,7 @@ class OCRPreprocessingPipeline:
         else:
             raise ValueError(
                 f"binarize: method must be one of "
-                f"['adaptive', 'otsu', 'sauvola'], got '{method}'"
+                f"['adaptive', 'otsu'], got '{method}'"
             )
 
         return self._to_bgr(binary)
