@@ -1,13 +1,30 @@
 """
-ocr_preprocessing.py
+ocr_pipeline/ocr_preprocessing.py
 ====================
-A collection of preprocessing functions for images to be fed into ocr_text_extractor.
+A collection of preprocessing functions for images to be fed into ocr_text_extraction.
 
 Includes a OCRPreprocessingPipeline class to allow creation of multiple pipelines for confidence voting.
+
+Pipelines so far:
+1. upscale(1.15) - denoise("bilateral") - enhance("clahe+bilateral+unsharp")   # for some reason, these are different
+2. normalize - denoise("bilateral") - enhance("clahe") - upscale(1.15)         # 
 """
 
 import numpy as np
 import cv2
+
+
+# Helper functions
+def _to_gray(img: np.ndarray) -> np.ndarray:
+    if img.ndim == 2:
+        return img
+    return cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+
+def _to_bgr(img: np.ndarray) -> np.ndarray:
+    if img.ndim == 3 and img.shape[2] == 3:
+        return img.astype(np.uint8)
+    return cv2.cvtColor(img.astype(np.uint8), cv2.COLOR_GRAY2BGR)
 
 
 class OCRPreprocessingPipeline:
@@ -18,17 +35,19 @@ class OCRPreprocessingPipeline:
     ----------
     steps : list[callable]
           A list of preprocessing functions. Function parameters should be specified here.
-          Usage: lambda img: enhance(img, method="clahe")
     name : str
         A name for this pipeline for debugging purposes.
 
     Usage
     -----
+    from functools import partial
+    from ocr_pipeline.ocr_preprocessing import OCRPreprocessingPipeline as Pipeline
+
     pipeline = OCRPreprocessingPipeline(steps=[
-        normalize,
-        lambda img: denoise(img, method="bilateral"),
-        lambda img: enhance(img, method="clahe"),
-        lambda img: upscale(img, scale=1.15)
+        Pipeline.normalize,
+        partial(Pipeline.denoise, method="bilateral"),
+        partial(Pipeline.enhance, method="clahe"),
+        partial(Pipeline.upscale, scale=1.15)
         ])
 
     result = pipeline.run(image)
@@ -38,16 +57,6 @@ class OCRPreprocessingPipeline:
         self.name = name    
 
 
-    def run(self, image_path: str):
-        """Run the preprocessing functions in sequence."""
-        img = self.load(image_path)
-
-        for step in self.steps:
-            img = step(img)
-
-        return img
-    
-    
     def load(self, path: str) -> np.ndarray:
         """Load an image from a file path into a BGR uint8 numpy array."""
         img = cv2.imread(path)
@@ -56,23 +65,20 @@ class OCRPreprocessingPipeline:
         return img
 
 
+    def run(self, image_path: str):
+        """Run the preprocessing functions in sequence."""
+        # TODO: figure out how to run this in parallel
+        img = self.load(image_path)
 
-    # Helper functions
-    def _to_gray(self, img: np.ndarray) -> np.ndarray:
-        if img.ndim == 2:
-            return img
-        return cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        for step in self.steps:
+            img = step(img)
 
-
-    def _to_bgr(self, img: np.ndarray) -> np.ndarray:
-        if img.ndim == 3 and img.shape[2] == 3:
-            return img.astype(np.uint8)
-        return cv2.cvtColor(img.astype(np.uint8), cv2.COLOR_GRAY2BGR)
+        return img
 
 
     # Preprocessing functions
+    @staticmethod
     def upscale(
-        self,
         image: np.ndarray,
         method: str = "lanczos",
         min_width: int = 1240,
@@ -134,8 +140,8 @@ class OCRPreprocessingPipeline:
         return cv2.resize(image, (new_w, new_h), interpolation=interp[method])
 
 
+    @staticmethod
     def enhance(
-        self,
         image: np.ndarray,
         method: str = "clahe+bilateral+unsharp",
     ) -> np.ndarray:
@@ -176,11 +182,11 @@ class OCRPreprocessingPipeline:
             image = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
 
         elif method == "bg_subtract+clahe":
-            gray = self._to_gray(image).astype(np.float32)
+            gray = _to_gray(image).astype(np.float32)
             bg   = cv2.GaussianBlur(gray, (91, 91), 0)
             bg   = np.where(bg == 0, 1, bg)
             norm = (gray / bg * 200).clip(0, 255).astype(np.uint8)
-            image = self._to_bgr(norm)
+            image = _to_bgr(norm)
             lab  = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
             clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
             lab[:, :, 0] = clahe.apply(lab[:, :, 0])
@@ -200,8 +206,8 @@ class OCRPreprocessingPipeline:
         return image
 
 
+    @staticmethod
     def denoise(
-        self,
         image: np.ndarray,
         method: str = "nlm",
         h: float = 10.0,
@@ -249,11 +255,11 @@ class OCRPreprocessingPipeline:
                 f"['nlm', 'gaussian', 'median', 'bilateral'], got '{method}'"
             )
 
-        return self._to_bgr(image)
+        return _to_bgr(image)
 
 
+    @staticmethod
     def sharpen(
-        self,
         image: np.ndarray,
         method: str = "unsharp",
         strength: float = 1.5,
@@ -301,11 +307,11 @@ class OCRPreprocessingPipeline:
                 f"['unsharp', 'laplacian', 'highboost'], got '{method}'"
             )
 
-        return self._to_bgr(image)
+        return _to_bgr(image)
 
 
+    @staticmethod
     def binarize(
-        self,
         image: np.ndarray,
         method: str = "adaptive",
         block_size: int = 31,
@@ -331,7 +337,7 @@ class OCRPreprocessingPipeline:
         -------
         np.ndarray  BGR uint8  (pixel values are 0 or 255)
         """
-        gray = self._to_gray(image)
+        gray = _to_gray(image)
 
         if method == "adaptive":
             if block_size % 2 == 0:
@@ -351,14 +357,14 @@ class OCRPreprocessingPipeline:
         else:
             raise ValueError(
                 f"binarize: method must be one of "
-                f"['adaptive', 'otsu', 'sauvola'], got '{method}'"
+                f"['adaptive', 'otsu'], got '{method}'"
             )
 
-        return self._to_bgr(binary)
+        return _to_bgr(binary)
 
 
+    @staticmethod
     def deskew(
-        self,
         image: np.ndarray,
         method: str = "minarea",
         max_angle: float = 10.0,
@@ -385,7 +391,7 @@ class OCRPreprocessingPipeline:
         -------
         np.ndarray  BGR uint8
         """
-        gray = self._to_gray(image)
+        gray = _to_gray(image)
         _, binary = cv2.threshold(
             gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU
         )
@@ -435,8 +441,8 @@ class OCRPreprocessingPipeline:
         return rotated
 
 
+    @staticmethod
     def normalize(
-        self,
         image: np.ndarray,
     ) -> np.ndarray:
         """
@@ -446,11 +452,11 @@ class OCRPreprocessingPipeline:
         -------
         np.ndarray  BGR uint8
         """
-        gray = self._to_gray(image).astype(np.float32)
+        gray = _to_gray(image).astype(np.float32)
 
         lo, hi = gray.min(), gray.max()
         if hi == lo:
             return image   # flat image, nothing to normalize
         normalized = (gray - lo) / (hi - lo) * 255
 
-        return self._to_bgr(normalized.clip(0, 255).astype(np.uint8))
+        return _to_bgr(normalized.clip(0, 255).astype(np.uint8))

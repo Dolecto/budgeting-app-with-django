@@ -1,21 +1,35 @@
-from services import text_extraction
+from functools import partial
+from ocr_pipeline.ocr_preprocessing import OCRPreprocessingPipeline as Pipeline
+from ocr_pipeline.ocr_text_extraction import extract_text as ocr
 
-doc = text_extraction.Document()
 
-# You can pass the lang (as 3 letters code) to the class to improve accuracy
-# On ubuntu it requires the package tesseract-ocr-$lang$
-# On other OS, see https://github.com/tesseract-ocr/langdata
-doc = text_extraction.Document(lang="deu")
+# TODO: Connect to API.
+input_path = "../testing-materials/receipt_deu_04.jpg"
 
-# Read the file in. Currently accepts pdf, png, jpg, bmp, tiff.
-# If reading a PDF, doc2text will split the PDF into its component pages.
-doc.read('../test.jpg')
 
-# Crop the pages down to estimated text regions, deskew, and optimize for OCR.
-doc.process()
+pipeline_1 = Pipeline(steps=[
+    partial(Pipeline.upscale, scale=1.15),
+    partial(Pipeline.denoise, method="bilateral"),
+    partial(Pipeline.enhance, method="clahe+bilateral+unsharp"),
+])
 
-# Extract text from the pages.
-doc.extract_text()
-text = doc.get_text()
 
-print(text)
+pipeline_2 = Pipeline(steps=[
+    Pipeline.normalize,
+    partial(Pipeline.denoise, method="bilateral"),
+    partial(Pipeline.enhance, method="clahe"),
+    partial(Pipeline.upscale, scale=1.15)
+])
+
+
+result_1 = ocr(pipeline_1.run(input_path), 
+               json_output_dir="json_outputs", 
+               debug=True, 
+               debug_dir="ocr_debugging"
+               )
+
+result_2 = ocr(pipeline_2.run(input_path), 
+               json_output_dir="json_outputs", 
+               debug=True, 
+               debug_dir="ocr_debugging"
+               )
