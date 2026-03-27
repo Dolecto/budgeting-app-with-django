@@ -22,5 +22,14 @@ pipeline_2 = Pipeline(steps=[
 ])
 
 
-result_1 = ocr(pipeline_1.run(input_path))
-result_2 = ocr(pipeline_2.run(input_path))
+result_1 = ocr(pipeline_1.run(input_path), 
+               json_output_dir="json_outputs", 
+               debug=True, 
+               debug_dir="ocr_debugging"
+               )
+
+result_2 = ocr(pipeline_2.run(input_path), 
+               json_output_dir="json_outputs", 
+               debug=True, 
+               debug_dir="ocr_debugging"
+               )

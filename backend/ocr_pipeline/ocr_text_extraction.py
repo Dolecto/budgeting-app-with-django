@@ -13,7 +13,7 @@ from paddleocr import PaddleOCR
 # User constants
 # TODO: See what else to add here.
 #     : Connect with user settings file.
-USER_LANGUAGE = "en"
+USER_LANGUAGE = "de"
 
 
 # Model constants

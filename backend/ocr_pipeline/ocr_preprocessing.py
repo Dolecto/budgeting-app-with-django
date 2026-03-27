@@ -40,11 +40,14 @@ class OCRPreprocessingPipeline:
 
     Usage
     -----
+    from functools import partial
+    from ocr_pipeline.ocr_preprocessing import OCRPreprocessingPipeline as Pipeline
+
     pipeline = OCRPreprocessingPipeline(steps=[
-        normalize,
-        lambda img: denoise(img, method="bilateral"),
-        lambda img: enhance(img, method="clahe"),
-        lambda img: upscale(img, scale=1.15)
+        Pipeline.normalize,
+        partial(Pipeline.denoise, method="bilateral"),
+        partial(Pipeline.enhance, method="clahe"),
+        partial(Pipeline.upscale, scale=1.15)
         ])
 
     result = pipeline.run(image)
