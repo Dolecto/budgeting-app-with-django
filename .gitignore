@@ -1,6 +1,8 @@
 # Backend stuff
 *.venv
-backend/output
+backend/pipeline_tests
+backend/json_outputs
+backend/ocr_debugging
 testing-materials/
 __pycache__*
 
