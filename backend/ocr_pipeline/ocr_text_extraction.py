@@ -68,7 +68,13 @@ text_rec_model_map = {
 
 # https://github.com/PaddlePaddle/PaddleOCR/blob/main/paddleocr/_pipelines/ocr.py
 # TODO: Figure out how to keep model loaded at start up (unless settings change).
-def extract_text(img: np.ndarray, json_output_dir: str = "json_outputs", debug: bool = False, debug_dir: str = "ocr_debugging"):
+def extract_text(
+        img: np.ndarray, 
+        json_output_dir: str = "json_outputs", 
+        filename: str = "output",
+        debug: bool = False, 
+        debug_dir: str = "ocr_debugging"
+    ):
     ocr = PaddleOCR(
         lang=USER_LANGUAGE,
         ocr_version=PADDLE_VERSION,
@@ -92,14 +98,15 @@ def extract_text(img: np.ndarray, json_output_dir: str = "json_outputs", debug: 
     os.makedirs(json_output_dir, exist_ok=True)
 
     # Loop over pages
-    for res in result:  
-        # res.print()
+    for i, res in enumerate(result):
+        page_suffix = f"_p{i}" if len(result) > 1 else ""
+        json_path = os.path.join(json_output_dir, f"{filename}{page_suffix}.json")
+        res.save_to_json(json_path)
 
-        res.save_to_json(json_output_dir)
-        
         if debug:
             os.makedirs(debug_dir, exist_ok=True)
-            res.save_to_img(debug_dir)  
+            debug_path = os.path.join(debug_dir, f"{filename}{page_suffix}.jpg")
+            res.save_to_img(debug_path)
 
     num_pages = len(result)
     print(f"Saved {num_pages} page/s in {json_output_dir}")
