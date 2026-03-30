@@ -66,34 +66,38 @@ text_rec_model_map = {
 }
 
 
+# To keep model loaded at start up
+# TODO: Figure out what to do if settings change.
+def load_ocr() -> PaddleOCR:
+    return PaddleOCR(
+        lang=USER_LANGUAGE,
+        ocr_version=PADDLE_VERSION,
+        text_detection_model_name=TEXT_DET_MODEL,
+        text_recognition_model_name=text_rec_model_map[USER_LANGUAGE],
+
+        use_doc_orientation_classify=False,
+        doc_orientation_classify_model_name=DOC_ORIENTATION_MODEL,
+
+        use_doc_unwarping=True,
+        doc_unwarping_model_name=DOC_UNWARPING_MODEL,
+
+        use_textline_orientation=True,
+        textline_orientation_model_name=TEXTLINE_MODEL,
+
+        text_det_unclip_ratio=1.2,
+    )
+
+
 # https://github.com/PaddlePaddle/PaddleOCR/blob/main/paddleocr/_pipelines/ocr.py
-# TODO: Figure out how to keep model loaded at start up (unless settings change).
 def extract_text(
+        ocr_model: PaddleOCR,
         img: np.ndarray, 
         json_output_dir: str = "json_outputs", 
         filename: str = "output",
         debug: bool = False, 
         debug_dir: str = "ocr_debugging"
     ):
-    ocr = PaddleOCR(
-        lang=USER_LANGUAGE,
-        ocr_version=PADDLE_VERSION,
-        text_detection_model_name=TEXT_DET_MODEL, 
-        text_recognition_model_name=text_rec_model_map[USER_LANGUAGE],
-
-        use_doc_orientation_classify=False,     
-        doc_orientation_classify_model_name=DOC_ORIENTATION_MODEL,
-
-        use_doc_unwarping=True, 
-        doc_unwarping_model_name=DOC_UNWARPING_MODEL,
-
-        use_textline_orientation=True, 
-        textline_orientation_model_name=TEXTLINE_MODEL,
-
-        text_det_unclip_ratio=1.2,
-    )
-
-    result = ocr.predict(img)  
+    result = ocr_model.predict(img)  
 
     os.makedirs(json_output_dir, exist_ok=True)
 
