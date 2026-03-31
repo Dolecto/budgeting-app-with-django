@@ -6,9 +6,13 @@ A collection of preprocessing functions for images to be fed into ocr_text_extra
 Includes a OCRPreprocessingPipeline class to allow creation of multiple pipelines for confidence voting.
 
 Pipelines so far:
-1. upscale(1.15) - denoise("bilateral") - enhance("clahe+bilateral+unsharp")   # for some reason, these are different
-2. normalize - denoise("bilateral") - enhance("clahe") - upscale(1.15)         # 
+1. upscale(scale=1.15) - denoise("bilateral") - enhance("clahe") - denoise("bilateral") - sharpen("unsharp", strength=0.5)
+2. denoise("bilateral") - enhance("clahe") - upscale(scale=1.15)       
+3. denoise("gaussian") - enhance("clahe")
+4. denoise("nlm") - enhance("clahe") - upscale(scale=1.15)
+5. upscale(scale=1.15) - denoise("nlm") - enhance("clahe") - sharpen("unsharp", strength=0.5)
 """
+
 
 import numpy as np
 import cv2
