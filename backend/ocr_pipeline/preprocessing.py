@@ -1,9 +1,9 @@
 """
-ocr_pipeline/ocr_preprocessing.py
-====================
-A collection of preprocessing functions for images to be fed into ocr_text_extraction.
+ocr_pipeline/preprocessing.py
+=============================
+A collection of preprocessing functions for images to be fed into ocr_pipeline/text_extraction.
 
-Includes a OCRPreprocessingPipeline class to allow creation of multiple pipelines for confidence voting.
+Includes a OCRPreprocessingPipeline class to allow creation of multiple pipelines for voting.
 
 Pipelines so far:
 1. upscale(scale=1.15) - denoise("bilateral") - enhance("clahe") - denoise("bilateral") - sharpen("unsharp", strength=0.5)
@@ -38,7 +38,7 @@ class OCRPreprocessingPipeline:
     Parameters
     ----------
     steps : list[callable]
-          A list of preprocessing functions. Function parameters should be specified here.
+        A list of preprocessing functions. Function parameters should be specified here.
     name : str
         A name for this pipeline for debugging purposes.
 

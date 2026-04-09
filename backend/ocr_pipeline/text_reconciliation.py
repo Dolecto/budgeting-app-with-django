@@ -1,6 +1,6 @@
 """
-ocr_text_reconcilation.py
-=========================
+ocr_pipeline/text_reconcilation.py
+==================================
 Reconcile multiple OCR pipeline JSON outputs from text_extraction 
 for a single receipt image, then extract structured data based on receipt type.
 """
@@ -20,6 +20,7 @@ def cx(box): return (box[0]+box[2])/2.0
 def cy(box): return (box[1]+box[3])/2.0
 def bh(box): return box[3]-box[1]
 
+
 def parse_number(text):
     """Parse a price string to float."""
     c = text.strip().replace(" ", "")
@@ -35,8 +36,10 @@ def parse_number(text):
     try:    return float(c)
     except: return None
 
+
 def is_price(text):
     return bool(PRICE_RE.match(text.strip()))
+
 
 def is_noise(text):
     """True for single-char tokens or VAT-code column artefacts."""
@@ -46,6 +49,7 @@ def is_noise(text):
     if VATCODE_RE.match(t):
         return True
     return False
+
 
 def cents(value):
     """Convert float price to integer cents for exact comparison."""
@@ -362,8 +366,8 @@ def parse_receipt(sources, receipt_type):
     Returns
     -------
     dict with keys:
-      type, items, total, total_source  (grocery)
-      type, total, total_label          (restaurant)
+        type, items, total, total_source  (grocery)
+        type, total, total_label          (restaurant)
     """
     pipeline_row_lists = []
     for src in sources:

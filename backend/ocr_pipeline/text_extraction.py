@@ -1,8 +1,8 @@
 """
-ocr_pipeline/ocr_text_extraction.py
-==================================
-Extracts text from images given by ocr_preprocessing and outputs a structured JSON file
-to be used in the frontend. 
+ocr_pipeline/text_extraction.py
+===============================
+Extracts text from images given by ocr_pipeline/preprocessing and outputs a JSON file
+with text bounding boxes. 
 """
 
 import os
@@ -115,5 +115,7 @@ def extract_text(
     num_pages = len(result)
     print(f"Saved {num_pages} page/s in {json_output_dir}")
     if debug: print(f"Saved {num_pages} image/s in {debug_dir}")
+
+    return result
 
 
