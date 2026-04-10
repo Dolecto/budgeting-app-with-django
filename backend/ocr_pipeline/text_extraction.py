@@ -1,8 +1,8 @@
 """
-ocr_pipeline/ocr_text_extraction.py
-==================================
-Extracts text from images given by ocr_preprocessing and outputs a structured JSON file
-to be used in the frontend. 
+ocr_pipeline/text_extraction.py
+===============================
+Extracts text from images given by ocr_pipeline/preprocessing and outputs a JSON file
+with text bounding boxes. 
 """
 
 import os
@@ -66,43 +66,56 @@ text_rec_model_map = {
 }
 
 
-# https://github.com/PaddlePaddle/PaddleOCR/blob/main/paddleocr/_pipelines/ocr.py
-# TODO: Figure out how to keep model loaded at start up (unless settings change).
-def extract_text(img: np.ndarray, json_output_dir: str = "json_outputs", debug: bool = False, debug_dir: str = "ocr_debugging"):
-    ocr = PaddleOCR(
+# To keep model loaded at start up
+# TODO: Figure out what to do if settings change.
+def load_ocr() -> PaddleOCR:
+    return PaddleOCR(
         lang=USER_LANGUAGE,
         ocr_version=PADDLE_VERSION,
-        text_detection_model_name=TEXT_DET_MODEL, 
+        text_detection_model_name=TEXT_DET_MODEL,
         text_recognition_model_name=text_rec_model_map[USER_LANGUAGE],
 
-        use_doc_orientation_classify=False,     
+        use_doc_orientation_classify=False,
         doc_orientation_classify_model_name=DOC_ORIENTATION_MODEL,
 
-        use_doc_unwarping=True, 
+        use_doc_unwarping=True,
         doc_unwarping_model_name=DOC_UNWARPING_MODEL,
 
-        use_textline_orientation=True, 
+        use_textline_orientation=True,
         textline_orientation_model_name=TEXTLINE_MODEL,
 
         text_det_unclip_ratio=1.2,
     )
 
-    result = ocr.predict(img)  
+
+# https://github.com/PaddlePaddle/PaddleOCR/blob/main/paddleocr/_pipelines/ocr.py
+def extract_text(
+        ocr_model: PaddleOCR,
+        img: np.ndarray, 
+        json_output_dir: str = "json_outputs", 
+        filename: str = "output",
+        debug: bool = False, 
+        debug_dir: str = "ocr_debugging"
+    ):
+    result = ocr_model.predict(img)  
 
     os.makedirs(json_output_dir, exist_ok=True)
 
     # Loop over pages
-    for res in result:  
-        # res.print()
+    for i, res in enumerate(result):
+        page_suffix = f"_p{i}" if len(result) > 1 else ""
+        json_path = os.path.join(json_output_dir, f"{filename}{page_suffix}.json")
+        res.save_to_json(json_path)
 
-        res.save_to_json(json_output_dir)
-        
         if debug:
             os.makedirs(debug_dir, exist_ok=True)
-            res.save_to_img(debug_dir)  
+            debug_path = os.path.join(debug_dir, f"{filename}{page_suffix}.jpg")
+            res.save_to_img(debug_path)
 
     num_pages = len(result)
     print(f"Saved {num_pages} page/s in {json_output_dir}")
     if debug: print(f"Saved {num_pages} image/s in {debug_dir}")
+
+    return result
 
 
